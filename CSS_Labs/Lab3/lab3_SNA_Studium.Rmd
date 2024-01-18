@@ -1,0 +1,404 @@
+---
+title: "Social Network Analysis"
+output: html_notebook
+---
+
+
+
+```{r}
+setwd("")
+
+install.packages ("statnet")
+install.packages ("igraph")
+install.packages ("intergraph")
+
+library (igraph)
+library (statnet)
+library (intergraph)
+
+
+```
+
+## Working with networks
+
+On this workshop, we will work with the data that represents an infamous 9/11 terrorist network. It was collected by Valdis Krebbs (2002) and consists of data on network ties among 9/11 terrorists and their node attributes ("network strength", "ties", "attended Las Vegas metting").
+
+Krebs, Valdis E. "Mapping networks of terrorist cells." Connections 24.3 (2002): 43-52. https://www.aclu.org/sites/default/files/field_document/ACLURM002810.pdf
+
+Node attributes are as follows:
+
+- **Network strength:** 1 = trusted prior contacts; 2 = associates.
+- **Ties:** 1 = AA #11 WTC North; 2 = AA #77 Pentagon; 3 = UA #93 Pennsylvania; 4 = UA #175 WTC South; 5 = Other Associates.
+- **Las Vegas Meeting:** 1 = Attended; 0 = Did Not Attend.
+
+Below is the code to load the data, clean it and create an adjacency matrix for the network ties.
+
+```{r}
+#load the data
+#for .csv formats: use read.csv()
+ties911<- read.csv("911_ties-1.csv", header = T, stringsAsFactors = F)
+attr911 <- read.csv("911_attributes.csv", header = T, stringsAsFactors = F)
+
+ties911
+attr911
+```
+
+
+```{r}
+#extract the names of the terrorists
+names911 <- as.character(ties911$X) #extract names
+names911 #print names
+ties911$X<- NULL #delete the column with their names
+
+#create a matrix for the ties
+mat911<-as.matrix (ties911) #convert the data frame into an adjacency matrix
+colnames (mat911) <- names911 #assign column names
+rownames(mat911) <- names911 #assign row names
+
+#attr911$X<- as.character(attr911$X)
+rownames (attr911) <- attr911$X #assign row names of the attribute info data frame
+attr911$X <- NULL #delete the column with the terrorists' names
+
+colnames(mat911) %in% rownames (attr911) #check that the names of the terrorists in the matrix match the names in the node attribute data frame 
+```
+
+
+### Creating a network
+
+```{r}
+graph <- graph.adjacency(mat911, mode = "directed")
+graph
+```
+
+
+###Adding and deleting node attributes
+
+```{r}
+#add node attribute
+graph<-set_vertex_attr(graph, "ties", value = attr911$Ties)
+
+
+#delete node attribute
+delete_vertex_attr (graph, "ties")
+
+#another way to add a node attribute
+V(graph)$ties <- attr911$Ties
+```
+
+**TASK:** try adding other node attributes (Network.Strength and Las.Vegas.Meeting) to the network.
+
+```{r}
+#your code here:
+V(graph)$la_meeting<-attr911$Las.Vegas.Meeting
+V(graph)$network_strength <- attr911$Network.Strength
+
+```
+
+## Plotting networks
+
+We can plot our network using plot() function in igraph package
+
+```{r}
+
+par(mar=c(0,0,0,0)) # get rid of plot margins
+plot(graph, #our network
+  vertex.size = 10, # the size of nodes
+  vertex.label = V(graph)$name, # what do we want to display as node labels? 
+  vertex.label.cex = 0.8, #the size of node labels
+  vertex.label.color = "black", #the colour of node labels
+  edge.color = "black", #the colour of edges
+  edge.arrow.size = 0.5, #edge arrow size
+  vertex.color    = "lightblue", # the colour of nodes
+  layout=layout_with_kk # the layout of the network
+  )
+
+```
+
+What if we want to display the nodes as belonging to different groups? 
+
+
+```{r}
+
+par(mar=c(0,0,0,0)) # get rid of plot margins
+plot(graph, #our network
+  vertex.size = 10, # the size of nodes
+  vertex.label = V(graph)$name, # what do we want to display as node labels? 
+  vertex.label.cex = 0.6, #the size of node labels
+  vertex.label.color = "black", #the colour of node labels
+  edge.color = "black", #the colour of edges
+  edge.arrow.size = 0.5, #edge arrow size
+  vertex.color = V(graph)$ties, # the colour of nodes
+  layout=layout_with_kk # the layout of the network
+  )
+
+
+```
+
+**TASK:** play with different arguments and parameters in the plot() function, such as shape or layout. Check the function's help page: 
+https://igraph.org/r/doc/plot.common.html
+
+
+```{r}
+#your code here:
+
+
+```
+
+
+## Filtering networks
+
+Sometimes, we want to take a subset of a network. For instance, we might want to filter only terrorists who responsible for the attack on the World Trade Center (attribute "ties", values 1 and 4).
+
+Moreover, we need to use logical operators that are the following:
+
+- **x & y** - x AND y (both x and y);
+- **x | y** - x OR y (either x or y);
+- **x==y** - x EQUALS TO y;
+- **!x** - NOT x;
+
+Relational operators (for node attributes in numeric format only):
+
+**x<y**, **x>y**, **x<=y**, **x>=y**, **x!=y** - y greaten than x, x greater than y, y greaten than or equal to x, x greater than or eqaul to y, x not equal to y. For node attributes in numeric format, we can also use math operators, such as **+** and **-** and so on. 
+
+```{r}
+
+#first, identify terrorists who participated in the WTC attack:
+
+wtc_terrorists = attr911[(attr911$Ties ==1)|(attr911$Ties ==4),] #data frame filtering. subset only rows that have tie value of 1 OR (|) 4.  
+terrorists_names <-rownames (wtc_terrorists) #extract row names
+
+#now, create a subgraph
+wtc_graph <- induced_subgraph(
+  graph = graph, #our network
+  vids = terrorists_names, #the names of the terrorists to be kept
+)
+
+plot (wtc_graph)
+
+```
+
+**TASK:** create a subgraph where only terrorists with network strength equals 1 are included.
+
+
+```{r}
+#your code here:
+ntwrk_terrorists = attr911[(attr911$Network.Strength ==1),]
+terrorists_ntwrk <-rownames (ntwrk_terrorists) #extract row names
+
+#now, create a subgraph
+ntwrk_graph <- induced_subgraph(
+  graph = graph, #our network
+  vids = terrorists_ntwrk, #the names of the terrorists to be kept
+)
+plot (ntwrk_graph)
+
+```
+
+## Calculating network properties
+
+```{r}
+#summary of the network
+summary(graph)
+
+#density - the proportion of observed ties to the number of possible ties
+edge_density(graph) 
+
+#diameter - how compact is the network? 
+diameter(graph)
+
+#how many (disconnected) components does the network have?
+
+igraph::components (graph)
+
+#transitivity / clustering coefficient - the proportion of closed triangles to the number of open AND closed triangles
+transitivity(graph)
+```
+
+
+## Measures of centrality
+
+Measures of centrality help us to find the most prominent and important nodes in networks. 
+
+### Degree centrality
+
+*Degree centrality* shows how many ties each node has. The more ties a node has, the more prominent it is considered to be in a given network.
+
+To calculate degree centrality, we can use *degree ()* function. Don't forget to specify whether you have a directed or undirected network. Use *mode* argument if you want to calculate indegree centrality  (mode = "in") or outdegree centrality (mode = "out").
+
+```{r}
+dc_in <- igraph::degree (graph, mode = "in") #indegree centrality 
+dc_in
+
+max (dc_in) #what is the highest degree value in this network?
+which.max (dc_in) #who (which node) has the highest degree value in the network?
+attr911 [15,] 
+
+
+dc_out <- igraph::degree (graph, mode = "out") #outdegree centrality
+dc_out
+
+max (dc_out) #what is the highest degree value in this network?
+which.max (dc_out) #who (which node) has the highest degree value in the network?
+attr911 [54,] 
+
+```
+
+### Closeness centrality
+
+*Closeness centrality* describes how close/far each node is in relation to other nodes in the network (remember "six degrees of separation" or the idea that every person on the Earth can reach other person in just six steps on average). Nodes with high closeness centrality can reach other nodes in just a few steps, whereas nodes with low closeness centrality scores need to make many steps. 
+
+Closeness centrality for each node is calculated as number of nodes minus one (this is the  hypothetical minimal sum of the shortest paths for each node) divided by the sum of the observed shortest paths between the given node and all other nodes in the network. It is expressed between 0 and 1. The higher the closeness score, the closer the node is located to other nodes in the network.
+
+```{r}
+cc <- round (igraph::closeness (graph, mode = "all"), 2)
+cc
+max (cc) #what is the highest degree value in this network?
+which.max (cc) #who (which node) has the highest degree value in the network?
+attr911 [3,] 
+
+par(mar=c(0,0,0,0))
+plot(graph, vertex.cex = 4, vertex.size=cc+6, 
+     vertex.label.cex = 0.7, vertex.label.color= "black", edge.curved=T,  edge.arrow.size = 0.5) 
+```
+
+### Eigenvector centrality
+
+*Eigenvector centrality* Recall that the nodes who have highest degree (that is, the number of ties), also have highest degree centrality. However, this does not necessarily mean that they are the most important ones - what if they have many connections to the unimportant nodes only (that have few connections to others in the network)? 
+
+We can use eigenvector centrality to figure out who the most important nodes in the network are. The nodes that have high eigenvector centrality are connected to other highly connected nodes in the network.
+
+```{r}
+ec <- round(igraph::evcent(graph)$vector, 2)
+ec
+max (ec)
+which.max (ec)
+attr911  [15,]
+
+```
+
+### Betweenness centrality
+*Betweenness centrality* is something less intuititve, however, to put it simply, nodes that have highest betweenness centrality sit in between the most of the pairs of other nodes. In other words, when other nodes will send information in the network, this information will very likely pass through these nodes with high betweenness centrality.     
+
+**TASK**: calculate betweenness centrality using function *betweenness ()*.
+
+```{r}
+#your code here:
+bc <- igraph::betweenness(graph)
+bc
+```
+
+
+### Summing up centrality scores
+
+Now that we've calculated the centrality measures, we can assemble our summary data frame that will include all centrality scores for each node. 
+
+```{r}
+#create a dataframe
+graph_cent <- data.frame (
+  indegree = dc_in,
+  outdegree = dc_out,
+  betweenness = bc,
+  eigenvector = ec, 
+  id = V(graph)$name
+  )
+
+graph_cent
+
+#order the data frame by the nodes' eigenvector centrality
+graph_cent <- graph_cent [order (-graph_cent$eigenvector),]
+graph_cent
+
+#check the first ten terrorists who have the highest eigenvector centrality scores:
+top10<- (head (graph_cent, 10))
+top10
+attr911 [rownames(attr911) %in% top10$id,] 
+```
+
+## Community detection algorithms
+
+To identify different communities in the network, we can use various community detection algorithms. 
+First of all, we need to transform our network into an undirected one, since some community detection algorithms work only with undirected graphs.  
+
+```{r}
+graph_u <- as.undirected(graph)
+graph_u
+```
+
+**Cluster_fast_greedy** is a hierarchical bottom-up algorithm that, at each step, merges two groups of nodes so that the highest modularity is achieved. It starts at the step 1, when every node in the network represents one community; on the step 2, two nodes are merged into one community so that the highest modularity is achieved. It continues merging the communities until it is no longer possible to achieve higher modularity value for the given network. 
+As it follows from its name, this algorithm is fast and greedy, meaning that it works fast, but that smaller communities tend to be swallown up by the bigger communities (and that's why it's greedy).   
+
+```{r}
+
+cfg <- cluster_fast_greedy(graph_u)
+
+membership (cfg) #print each node's community membership 
+
+table (membership(cfg)) #how many members are there in each community?
+
+modularity (cfg) #check the modularity value
+
+table (V(graph_u)$ties, membership(cfg)) #do the people responsible for the particular attacks tend to be in the same communities?
+
+
+#plot communities
+par(mar=c(0,0,0,0))
+plot(cfg, graph_u, vertex.cex = 4, vertex.size=igraph::degree(graph_u, mode="in")+6, 
+     vertex.label.cex = 0.7, vertex.label.color= "black", edge.curved=T,  edge.arrow.size = 0.5) 
+```
+
+**Cluster_walktrap:** the idea behind this bottom-up algorithm is to find communities via "short random walks" (3-5 steps each), and it is based on the assumption that these walks would be performed within the given community (since there are more ties within the community than outside it). It starts from step 1 where each node represents one community and sequentially merges communities based on these random walks. It is considered to be a bit slower, but also a bit more precise algorithm than the fast and greedy algorithm.
+
+```{r}
+cw <- cluster_walktrap(graph)
+membership (cw)
+table (membership(cw))
+modularity (cw)
+
+table (V(graph)$ties, membership(cw))
+
+par(mar=c(0,0,0,0))
+plot(cw, graph, vertex.cex = 4, vertex.size=igraph::degree(graph, mode="in")+6, 
+     vertex.label.cex = 0.7, vertex.label.color= "black", edge.curved=T,  edge.arrow.size = 0.5)
+```
+
+**Cluster_edge_betweenness:** it is a hierarchical top-down algorithm where edges are removed sequentially based on their edge betweenness scores (those with highest edge betweenness are removed first) and so that the highest modularity score is achieved. So, the algorithm starts with step 1, where all nodes represent one community, and then sequentially removes edges and recalculates their betweenness scores until the network falls apart into several pieces. The idea behind this is that the edges with highest betweenness scores are the most likely candidates to connect different communities within the network.This algorithm is the slowest one, but also quite accurate. NOTE: works only for undirected graphs!
+
+```{r}
+ceb <- cluster_edge_betweenness(graph_u)
+membership (ceb)
+modularity (ceb)
+table (membership(ceb))
+
+table (V(graph_u)$ties, membership(ceb))
+
+
+plot (ceb, graph_u)
+
+par(mar=c(0,0,0,0))
+plot(ceb, graph_u, vertex.cex = 4, vertex.size=igraph::degree(graph_u)+6, 
+     vertex.label.cex = 0.7, vertex.label.color= "black", edge.curved=T,  edge.arrow.size = 0.5)
+```
+
+**TASK:** try to use other community detection algorithms, such as cluster_louvain, cluster_infomap, cluster_spinglass, cluster_optimal. Compare the results.
+
+```{r}
+#your code here:
+infomap<-cluster_infomap(graph_u)
+membership (infomap)
+modularity (infomap)
+table (membership(infomap))
+
+table (V(graph_u)$ties, membership(infomap))
+
+
+plot (infomap, graph_u)
+
+par(mar=c(0,0,0,0))
+plot(infomap, graph_u, vertex.cex = 4, vertex.size=igraph::degree(graph_u)+6, 
+     vertex.label.cex = 0.7, vertex.label.color= "black", edge.curved=T,  edge.arrow.size = 0.5)
+```
+
+
+
+
+
